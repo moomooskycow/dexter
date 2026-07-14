@@ -275,11 +275,37 @@ export class Agent {
       }
     }
 
-    // Max iterations reached
+    // The final iteration may have produced useful tool evidence. Make one
+    // tool-free call so the model must synthesize what it already gathered
+    // instead of discarding the last result behind a generic limit message.
+    messages.push(new HumanMessage(
+      `You have reached the research iteration limit (${this.maxIterations}). ` +
+      'Do not call more tools. Produce the best final answer supported by the evidence above. ' +
+      'State missing or failed evidence explicitly and do not invent facts.',
+    ));
+
+    let answer = `Reached maximum iterations (${this.maxIterations}) without a usable synthesis.`;
+    try {
+      const result = await callLlmWithMessages(messages, {
+        model: this.model,
+        signal: this.signal,
+      });
+      if (result.usage) {
+        ctx.tokenCounter.add(result.usage);
+      }
+      const synthesized = extractTextContent(result.response as AIMessage)?.trim();
+      if (synthesized) {
+        answer = synthesized;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      answer = `${answer}\n\nSynthesis error: ${formatUserFacingError(message, resolveProvider(this.model).displayName)}`;
+    }
+
     const totalTime = Date.now() - ctx.startTime;
     yield {
       type: 'done',
-      answer: `Reached maximum iterations (${this.maxIterations}). I was unable to complete the research in the allotted steps.`,
+      answer,
       toolCalls: ctx.scratchpad.getToolCallRecords(),
       iterations: ctx.iteration,
       totalTime,

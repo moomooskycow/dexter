@@ -20,6 +20,7 @@ import { memoryGetTool, MEMORY_GET_DESCRIPTION, memorySearchTool, MEMORY_SEARCH_
 import { discoverSkills } from '../skills/index.js';
 import { createSpawnSubagent, SPAWN_SUBAGENT_DESCRIPTION } from './subagent/spawn-subagent.js';
 import { createAskUserQuestion, ASK_USER_QUESTION_DESCRIPTION } from './ask-user-question/ask-user-question.js';
+import { secFilingsTool } from './sec/sec-filings.js';
 
 /**
  * A registered tool with its rich description for system prompt injection.
@@ -93,6 +94,13 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       tool: createWebFetch(model),
       description: WEB_FETCH_DESCRIPTION,
       compactDescription: 'Fetch a URL and answer a prompt about its content (HTML→markdown, fast-model summarized).',
+      concurrencySafe: true,
+    },
+    {
+      name: 'sec_filings',
+      tool: secFilingsTool,
+      description: secFilingsTool.description,
+      compactDescription: 'Primary SEC filing metadata and optional document text from EDGAR; no paid provider required.',
       concurrencySafe: true,
     },
     {
