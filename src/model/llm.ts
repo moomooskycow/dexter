@@ -93,7 +93,7 @@ const MODEL_FACTORIES: Record<string, ModelFactory> = {
       ...opts,
       apiKey: getApiKey('OPENROUTER_API_KEY'),
       configuration: {
-        baseURL: 'https://openrouter.ai/api/v1',
+        baseURL: process.env.OPENROUTER_BASE_URL ?? 'https://openrouter.ai/api/v1',
       },
     }),
   moonshot: (name, opts) =>

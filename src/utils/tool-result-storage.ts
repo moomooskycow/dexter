@@ -31,9 +31,15 @@ export function persistLargeResult(
 
   const sanitizedId = toolCallId.replace(/[^a-zA-Z0-9_-]/g, '_');
   const filePath = `${RESULTS_DIR}/${sanitizedId}.txt`;
-  writeFileSync(filePath, result, 'utf-8');
+  let persisted = result;
+  try {
+    persisted = JSON.stringify(JSON.parse(result), null, 2);
+  } catch {
+    // Non-JSON tool output is already readable as plain text.
+  }
+  writeFileSync(filePath, persisted, 'utf-8');
 
-  const preview = result.slice(0, PREVIEW_CHARS);
+  const preview = persisted.slice(0, PREVIEW_CHARS);
   return { preview, filePath };
 }
 

@@ -10,7 +10,7 @@ let exaTool: { invoke: (query: string) => Promise<unknown> } | null = null;
 
 function getExaTool(): { invoke: (query: string) => Promise<unknown> } {
   if (!exaTool) {
-    const client = new Exa(process.env.EXASEARCH_API_KEY);
+    const client = new Exa(process.env.EXASEARCH_API_KEY, process.env.EXA_BASE_URL);
     // exa-js@2.x (root) vs exa-js@1.x (inside @langchain/exa) have
     // incompatible private fields but are compatible at runtime.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

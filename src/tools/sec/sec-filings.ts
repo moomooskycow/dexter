@@ -3,14 +3,14 @@ import { parseHTML } from 'linkedom';
 import { z } from 'zod';
 import { formatToolResult } from '../types.js';
 
-const MAX_DOCUMENT_CHARS = 80_000;
+const MAX_DOCUMENT_CHARS = 200_000;
 const TICKER_CACHE_MS = 24 * 60 * 60 * 1000;
 
 type TickerEntry = { cik_str: number; ticker: string; title: string };
 type RecentFilings = Record<string, unknown[]>;
 type FilingResult = Record<string, string> & {
   documentUrl: string;
-  documentText?: string;
+  documentTextChunks?: string[];
   documentError?: string;
 };
 
@@ -73,9 +73,11 @@ function rowsFromRecent(recent: RecentFilings): Record<string, string>[] {
   });
 }
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   const { document } = parseHTML(html);
-  for (const node of document.querySelectorAll('script, style, noscript')) node.remove();
+  for (const node of document.querySelectorAll(
+    'script, style, noscript, [hidden], ix\\:header, ix\\:hidden, [style*="display:none"], [style*="display: none"]',
+  )) node.remove();
   return (document.body?.textContent ?? document.textContent ?? '')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+/g, ' ')
@@ -94,6 +96,28 @@ async function fetchDocument(url: string): Promise<string> {
   return htmlToText(await response.text());
 }
 
+function chunkDocumentText(text: string, size = 1_200): string[] {
+  const chunks: string[] = [];
+  for (let offset = 0; offset < text.length; offset += size) {
+    chunks.push(text.slice(offset, offset + size));
+  }
+  return chunks;
+}
+
+export function selectDocumentChunks(chunks: string[], query?: string): string[] {
+  const needle = query?.trim().toLowerCase();
+  if (!needle) return chunks;
+  const selected = new Set<number>();
+  chunks.forEach((chunk, index) => {
+    if (chunk.toLowerCase().includes(needle)) {
+      if (index > 0) selected.add(index - 1);
+      selected.add(index);
+      if (index + 1 < chunks.length) selected.add(index + 1);
+    }
+  });
+  return [...selected].sort((a, b) => a - b).map((index) => chunks[index]);
+}
+
 export const secFilingsTool = new DynamicStructuredTool({
   name: 'sec_filings',
   description:
@@ -110,6 +134,12 @@ export const secFilingsTool = new DynamicStructuredTool({
       .boolean()
       .optional()
       .describe('Fetch primary-document text for up to 3 matched filings. Default false.'),
+    document_query: z
+      .string()
+      .optional()
+      .describe(
+        'Optional case-insensitive phrase such as "risk factors". Returns matching document chunks plus adjacent context.',
+      ),
   }),
   func: async (input) => {
     const company = await resolveTicker(input.ticker);
@@ -129,9 +159,11 @@ export const secFilingsTool = new DynamicStructuredTool({
       }));
 
     if (input.include_document_text) {
-      for (const filing of matches.slice(0, 3)) {
+      const documentLimit = input.document_query ? 1 : 3;
+      for (const filing of matches.slice(0, documentLimit)) {
         try {
-          filing.documentText = await fetchDocument(filing.documentUrl);
+          const chunks = chunkDocumentText(await fetchDocument(filing.documentUrl));
+          filing.documentTextChunks = selectDocumentChunks(chunks, input.document_query);
         } catch (error) {
           filing.documentError = error instanceof Error ? error.message : String(error);
         }
