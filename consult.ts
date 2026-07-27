@@ -2,7 +2,7 @@
 // consult.ts — headless one-shot Dexter consult for the Simons trading agent.
 // Provider calls route through Mint by default, so Dexter receives placeholders
 // instead of credentials. Set DEXTER_USE_MINT=false only for explicit fallback.
-// Default model is GPT-5.4 Mini via OpenRouter. Override with DEXTER_MODEL.
+// Default model is GPT-5.4 Mini via OpenAI. Override with DEXTER_MODEL.
 // Dexter is research evidence, never an order gate. Sanitize every output before
 // it reaches Simons' audit/context. See simons portfolio-operator/references/dexter-research-tool.md
 import { config } from 'dotenv';
@@ -13,6 +13,8 @@ const mintBaseUrl = process.env.MINT_BASE_URL ?? 'http://mint.tail5f5eb4.ts.net:
 if (useMint) {
   // Placeholders are not credentials. Mint swaps the real values only inside
   // its broker process, so Dexter never reads the raw provider keys.
+  process.env.OPENAI_API_KEY = '__mint.openai.default__';
+  process.env.OPENAI_BASE_URL = `${mintBaseUrl}/proxy/https/api.openai.com/v1`;
   process.env.OPENROUTER_API_KEY = '__mint.openrouter.default__';
   process.env.OPENROUTER_BASE_URL = `${mintBaseUrl}/proxy/https/openrouter.ai/api/v1`;
   process.env.EXASEARCH_API_KEY = '__mint.exa.default__';
@@ -34,7 +36,7 @@ if (!question) {
   process.exit(2);
 }
 
-const model = process.env.DEXTER_MODEL ?? 'openrouter:openai/gpt-5.4-mini';
+const model = process.env.DEXTER_MODEL ?? 'gpt-5.4-mini';
 const maxIterations = Number(process.env.DEXTER_MAX_ITERATIONS ?? '4');
 const timeoutMs = Number(process.env.DEXTER_TIMEOUT_MS ?? '180000');
 const configuredTools = process.env.DEXTER_TOOL_ALLOWLIST
@@ -46,7 +48,7 @@ const toolAllowlist = configuredTools?.length
   : ['sec_filings', 'web_search', 'web_fetch', 'browser', 'read_file'];
 
 async function readOpenRouterUsage(): Promise<number | null> {
-  if (!useMint) return null;
+  if (!useMint || !model.startsWith('openrouter:')) return null;
   try {
     const response = await fetch(`${process.env.OPENROUTER_BASE_URL}/key`, {
       headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
@@ -75,6 +77,7 @@ const usageBefore = await readOpenRouterUsage();
 let tokenUsage: { inputTokens: number; outputTokens: number; totalTokens: number } | undefined;
 
 const openRouterPricesPerToken: Record<string, { input: number; output: number }> = {
+  'gpt-5.4-mini': { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000 },
   'openrouter:openai/gpt-5.4-mini': { input: 0.75 / 1_000_000, output: 4.5 / 1_000_000 },
   'openrouter:z-ai/glm-5.2': { input: 0.91 / 1_000_000, output: 2.86 / 1_000_000 },
   'openrouter:deepseek/deepseek-v4-pro': { input: 0.435 / 1_000_000, output: 0.87 / 1_000_000 },
