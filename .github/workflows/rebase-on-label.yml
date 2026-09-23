@@ -1,4 +1,4 @@
-name: Rebase PR on main
+name: Rebase PR on master
 
 on:
   pull_request_target:
@@ -57,7 +57,7 @@ jobs:
               });
             }
 
-      - name: Rebase branch onto main
+      - name: Rebase branch onto master
         if: steps.meta.outputs.same_repo == 'true' || steps.fork_guard.outputs.can_rebase_fork == 'true'
         id: rebase
         continue-on-error: true
@@ -70,11 +70,11 @@ jobs:
           HEAD_REF="${{ steps.meta.outputs.head_ref }}"
           PUSH_TOKEN="${REBASE_PUSH_TOKEN:-$DEFAULT_GITHUB_TOKEN}"
 
-          git fetch origin main
+          git fetch origin master
           git remote add pr-head "https://x-access-token:${PUSH_TOKEN}@github.com/${HEAD_REPO}.git"
           git fetch pr-head "${HEAD_REF}"
           git checkout -B rebase-target FETCH_HEAD
-          git rebase origin/main
+          git rebase origin/master
           git push pr-head HEAD:"${HEAD_REF}" --force-with-lease
 
       - name: Comment rebase result
@@ -84,7 +84,7 @@ jobs:
           script: |
             const ok = "${{ steps.rebase.outcome }}" === "success";
             const body = ok
-              ? "Applied `rebase`: rebased this PR branch onto `main`."
+              ? "Applied `rebase`: rebased this PR branch onto `master`."
               : [
                   "Tried to apply `rebase`, but it failed.",
                   "If this is a fork PR, ensure `Allow edits by maintainers` is enabled and `REBASE_PUSH_TOKEN` has permission to push, then re-apply the label.",
